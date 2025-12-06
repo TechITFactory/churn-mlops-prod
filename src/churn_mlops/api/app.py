@@ -25,13 +25,7 @@ class ModelBundle:
 
 
 class PredictRequest(BaseModel):
-    """
-    We accept a flexible feature payload.
-    This lets you call the API using:
-      - daily aggregated features from another service
-      - or a simplified demo JSON in the course.
-    """
-    user_id: Optional[int] = Field(default=None, description="Optional user identifier")
+    user_id: Optional[int] = Field(default=None)
     features: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -52,20 +46,17 @@ def _load_bundle() -> ModelBundle:
     if not prod_path.exists():
         raise FileNotFoundError(
             f"Missing production model alias: {prod_path}. "
-            f"Run ./scripts/promote_model.sh first."
+            f"Run promote step first."
         )
 
     blob = joblib.load(prod_path)
 
-    # Expected save format:
-    # {"model": pipeline, "cat_cols": [...], "num_cols": [...], "settings": {...}}
     if isinstance(blob, dict) and "model" in blob:
         model = blob["model"]
         cat_cols = list(blob.get("cat_cols", []))
         num_cols = list(blob.get("num_cols", []))
         return ModelBundle(model=model, cat_cols=cat_cols, num_cols=num_cols, raw=blob)
 
-    # Fallback for simpler saved models
     return ModelBundle(model=blob, cat_cols=[], num_cols=[], raw={"model": blob})
 
 
@@ -77,31 +68,22 @@ def _get_bundle() -> ModelBundle:
 
 
 def _align_features(features: Dict[str, Any], bundle: ModelBundle) -> pd.DataFrame:
-    """
-    Ensure incoming JSON won't break ColumnTransformer selection.
-    - If cat/num cols were captured during training, we create them if missing.
-    - Extra keys are okay; pipeline selects needed columns.
-    """
     if bundle.cat_cols or bundle.num_cols:
         data = dict(features)
 
         for c in bundle.cat_cols:
-            if c not in data:
-                data[c] = None
-
+            data.setdefault(c, None)
         for c in bundle.num_cols:
-            if c not in data:
-                data[c] = 0.0
+            data.setdefault(c, 0.0)
 
         df = pd.DataFrame([data])
-        # Make sure all expected cols exist exactly
+
         for c in bundle.cat_cols + bundle.num_cols:
             if c not in df.columns:
                 df[c] = None if c in bundle.cat_cols else 0.0
 
         return df
 
-    # If we don't have stored cols, just pass what we received
     return pd.DataFrame([features])
 
 
@@ -117,13 +99,26 @@ def startup():
         logger.error("Failed to load model on startup: %s", e)
 
 
-@app.get("/health")
-def health():
+@app.get("/live")
+def live():
+    # Pure process health
+    return {"status": "ok"}
+
+
+@app.get("/ready")
+def ready():
+    # Readiness depends on model availability
     try:
         _get_bundle()
         return {"status": "ok"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.get("/health")
+def health():
+    # Backward-compatible alias for readiness
+    return ready()
 
 
 @app.post("/predict", response_model=PredictResponse)
@@ -132,19 +127,11 @@ def predict(req: PredictRequest):
         bundle = _get_bundle()
         X = _align_features(req.features, bundle)
 
-        # Our promoted models are pipelines with predict_proba
         if not hasattr(bundle.model, "predict_proba"):
             raise ValueError("Loaded model does not support predict_proba")
 
         proba = float(bundle.model.predict_proba(X)[:, 1][0])
-
-        model_type = "unknown"
-        if isinstance(bundle.raw, dict):
-            # we store model_type in metrics, not always in model blob
-            # so keep this simple
-            model_type = "production_pipeline"
-
-        return PredictResponse(user_id=req.user_id, churn_risk=proba, model_type=model_type)
+        return PredictResponse(user_id=req.user_id, churn_risk=proba, model_type="production_pipeline")
 
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e

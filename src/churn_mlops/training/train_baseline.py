@@ -249,7 +249,9 @@ def main():
 
     logger.info("Model saved ✅ -> %s", model_path)
     logger.info("Metrics saved ✅ -> %s", metrics_path)
-    logger.info("PR-AUC: %.4f | ROC-AUC: %.4f", meta["metrics"]["pr_auc"], meta["metrics"]["roc_auc"])
+    logger.info(
+        "PR-AUC: %.4f | ROC-AUC: %.4f", meta["metrics"]["pr_auc"], meta["metrics"]["roc_auc"]
+    )
 
 
 if __name__ == "__main__":

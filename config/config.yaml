@@ -1,0 +1,14 @@
+app:
+  name: churn-mlops
+  log_level: INFO
+
+paths:
+  data: data
+  raw: data/raw
+  processed: data/processed
+  features: data/features
+  predictions: data/predictions
+
+  artifacts: artifacts
+  models: artifacts/models
+  metrics: artifacts/metrics

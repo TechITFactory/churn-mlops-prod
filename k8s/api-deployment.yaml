@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: churn-api
+  namespace: churn-mlops
+  labels:
+    app: churn-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: churn-api
+  template:
+    metadata:
+      labels:
+        app: churn-api
+    spec:
+      initContainers:
+        - name: init-dirs
+          image: busybox:1.36
+          command: ["sh", "-c", "mkdir -p /pvc/data /pvc/artifacts"]
+          volumeMounts:
+            - name: mlops-storage
+              mountPath: /pvc
+
+      containers:
+        - name: churn-api
+          image: techitfactory/churn-api:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+
+          env:
+            - name: CHURN_MLOPS_CONFIG
+              value: /app/config/config.yaml
+
+          volumeMounts:
+            - name: config
+              mountPath: /app/config/config.yaml
+              subPath: config.yaml
+
+            - name: mlops-storage
+              mountPath: /app/data
+              subPath: data
+
+            - name: mlops-storage
+              mountPath: /app/artifacts
+              subPath: artifacts
+
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 20
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+      volumes:
+        - name: config
+          configMap:
+            name: churn-mlops-config
+
+        - name: mlops-storage
+          persistentVolumeClaim:
+            claimName: churn-mlops-pvc

@@ -1,6 +1,6 @@
 import pandas as pd
 
-from churn_mlops.data.validate import validate_users, validate_events
+from churn_mlops.data.validate import validate_events, validate_users
 
 
 def test_validate_users_ok():

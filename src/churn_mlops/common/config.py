@@ -1,45 +1,99 @@
+from __future__ import annotations
+
 import os
+from copy import deepcopy
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import yaml
-from dotenv import load_dotenv
 
-load_dotenv()
+# Optional dotenv support
+try:
+    from dotenv import load_dotenv
 
-def _read_yaml(path: Path) -> Dict[str, Any]:
-    if not path.exists():
-        return {}
-    with path.open("r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-    if not isinstance(data, dict):
-        raise ValueError(f"Config file {path} must contain a YAML mapping/object.")
-    return data
+    load_dotenv()
+except Exception:
+    pass
+
+
+DEFAULT_CONFIG: Dict[str, Any] = {
+    "app": {
+        "name": "churn-mlops",
+        "log_level": "INFO",
+    },
+    "paths": {
+        "data": "data",
+        "raw": "data/raw",
+        "processed": "data/processed",
+        "features": "data/features",
+        "predictions": "data/predictions",
+        "artifacts": "artifacts",
+        "models": "artifacts/models",
+        "metrics": "artifacts/metrics",
+    },
+    "features": {
+        "windows_days": [7, 14, 30],
+    },
+    "churn": {
+        "window_days": 30,
+    },
+}
+
 
 def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
-    result = dict(base)
-    for k, v in override.items():
-        if k in result and isinstance(result[k], dict) and isinstance(v, dict):
-            result[k] = _deep_merge(result[k], v)
+    out = deepcopy(base)
+    for k, v in (override or {}).items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = _deep_merge(out[k], v)
         else:
-            result[k] = v
-    return result
+            out[k] = v
+    return out
 
-def load_config(config_dir: str = "configs") -> Dict[str, Any]:
-    env = os.getenv("APP_ENV", "dev").lower()
 
-    base_path = Path(config_dir) / "config.yaml"
-    env_path = Path(config_dir) / f"config.{env}.yaml"
+def _load_yaml(path: Path) -> Optional[Dict[str, Any]]:
+    try:
+        content = yaml.safe_load(path.read_text())
+        return content if isinstance(content, dict) else None
+    except Exception:
+        return None
 
-    base_cfg = _read_yaml(base_path)
-    env_cfg = _read_yaml(env_path)
 
-    cfg = _deep_merge(base_cfg, env_cfg)
-    cfg.setdefault("app", {})["env"] = env
+def load_config() -> Dict[str, Any]:
+    cfg = deepcopy(DEFAULT_CONFIG)
 
-    # Allow env override for log level
-    log_level = os.getenv("LOG_LEVEL")
-    if log_level:
-        cfg.setdefault("logging", {})["level"] = log_level.upper()
+    # 1) explicit env path wins
+    env_path = os.getenv("CHURN_MLOPS_CONFIG")
+
+    candidates = []
+    if env_path:
+        candidates.append(Path(env_path))
+
+    # 2) common repo defaults
+    candidates.extend(
+        [
+            Path("config/config.yaml"),
+            Path("config/app.yaml"),
+            Path("config/base.yaml"),
+        ]
+    )
+
+    for p in candidates:
+        if p.exists():
+            file_cfg = _load_yaml(p)
+            if file_cfg:
+                cfg = _deep_merge(cfg, file_cfg)
+            break
+
+    # Ensure required structure always exists
+    cfg.setdefault("app", {})
+    cfg.setdefault("paths", {})
+
+    # Backfill any missing path keys
+    for k, v in DEFAULT_CONFIG["paths"].items():
+        cfg["paths"].setdefault(k, v)
+
+    # Backfill log level
+    cfg["app"].setdefault("log_level", DEFAULT_CONFIG["app"]["log_level"])
+    cfg["app"].setdefault("name", DEFAULT_CONFIG["app"]["name"])
 
     return cfg

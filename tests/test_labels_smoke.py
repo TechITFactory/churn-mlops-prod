@@ -1,7 +1,9 @@
 from pathlib import Path
+
 import pandas as pd
 
 from churn_mlops.training.build_labels import build_labels
+
 
 def test_build_labels_basic():
     path = Path("data/processed/user_daily.csv")

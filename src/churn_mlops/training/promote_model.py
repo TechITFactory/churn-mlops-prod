@@ -1,132 +1,110 @@
-import argparse
+from __future__ import annotations
+
 import json
 import shutil
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-
-import joblib
+from typing import Any, Dict, Optional, Tuple
 
 from churn_mlops.common.config import load_config
-from churn_mlops.common.logging import setup_logging
-from churn_mlops.common.utils import ensure_dir
+from churn_mlops.common.logging import get_logger, setup_logging
 
 
 @dataclass
-class PromoteSettings:
-    models_dir: str
-    metrics_dir: str
-    registry_dir: str
-    primary_metric: str
+class Candidate:
+    model_path: Path
+    metrics_path: Path
+    score: float
+    metric_name: str
 
 
-def _latest_metrics_file(metrics_dir: str, prefix: str) -> Optional[Path]:
-    p = Path(metrics_dir)
-    files = sorted(p.glob(f"{prefix}_*.json"), reverse=True)
-    return files[0] if files else None
+def _read_metrics(p: Path) -> Dict[str, Any]:
+    return json.loads(p.read_text())
 
 
-def _read_metrics(path: Path) -> Dict[str, Any]:
-    with path.open("r", encoding="utf-8") as f:
-        return json.load(f)
+def _score_from_metrics(m: Dict[str, Any]) -> Tuple[str, float]:
+    # Prefer PR-AUC for imbalanced churn
+    for key in ("pr_auc", "average_precision", "roc_auc", "f1", "accuracy"):
+        if key in m and isinstance(m[key], (int, float)):
+            return key, float(m[key])
+    return "unknown", -1.0
 
 
-def _score(metrics: Dict[str, Any], primary: str) -> float:
-    return float(metrics.get("metrics", {}).get(primary, 0.0))
+def _find_candidates(models_dir: Path, metrics_dir: Path) -> list[Candidate]:
+    out: list[Candidate] = []
+
+    for mp in sorted(metrics_dir.glob("*.json")):
+        stem = mp.stem
+        model_guess = models_dir / f"{stem}.joblib"
+        if not model_guess.exists():
+            continue
+
+        m = _read_metrics(mp)
+        metric_name, score = _score_from_metrics(m)
+        out.append(
+            Candidate(
+                model_path=model_guess,
+                metrics_path=mp,
+                score=score,
+                metric_name=metric_name,
+            )
+        )
+
+    return out
 
 
-def _load_registry(registry_path: Path) -> Dict[str, Any]:
-    if not registry_path.exists():
-        return {"models": [], "production": None}
-    with registry_path.open("r", encoding="utf-8") as f:
-        return json.load(f)
+def promote_model() -> Dict[str, Any]:
+    cfg = load_config()
+    logger = get_logger()
 
+    models_dir = Path(cfg["paths"]["models"])
+    metrics_dir = Path(cfg["paths"]["metrics"])
 
-def _save_registry(registry_path: Path, registry: Dict[str, Any]):
-    with registry_path.open("w", encoding="utf-8") as f:
-        json.dump(registry, f, indent=2)
+    models_dir.mkdir(parents=True, exist_ok=True)
+    metrics_dir.mkdir(parents=True, exist_ok=True)
 
+    candidates = _find_candidates(models_dir, metrics_dir)
 
-def promote(settings: PromoteSettings) -> Path:
-    baseline_m = _latest_metrics_file(settings.metrics_dir, "baseline_logreg")
-    candidate_m = _latest_metrics_file(settings.metrics_dir, "candidate_hgb")
+    if not candidates:
+        raise FileNotFoundError(
+            f"No promotable models found in {models_dir}. "
+            f"Expected a .joblib with matching .json metrics."
+        )
 
-    if not baseline_m and not candidate_m:
-        raise FileNotFoundError("No metrics found to promote.")
+    # Choose best score
+    best = sorted(candidates, key=lambda c: c.score, reverse=True)[0]
 
-    contenders: List[Tuple[str, Path, Dict[str, Any]]] = []
-    if baseline_m:
-        contenders.append(("baseline_logreg", baseline_m, _read_metrics(baseline_m)))
-    if candidate_m:
-        contenders.append(("candidate_hgb", candidate_m, _read_metrics(candidate_m)))
+    prod_model = models_dir / "production_latest.joblib"
+    prod_metrics = metrics_dir / "production_latest.json"
 
-    # Choose best by primary metric
-    best = max(contenders, key=lambda x: _score(x[2], settings.primary_metric))
-    best_name, best_metrics_path, best_metrics = best
+    shutil.copy2(best.model_path, prod_model)
+    shutil.copy2(best.metrics_path, prod_metrics)
 
-    best_artifact = best_metrics.get("artifact")
-    if not best_artifact:
-        raise ValueError(f"Metrics file {best_metrics_path} missing 'artifact' field")
+    logger.info(
+        "Promoted model: %s (metric=%s score=%.5f) -> %s",
+        best.model_path.name,
+        best.metric_name,
+        best.score,
+        prod_model.name,
+    )
 
-    best_model_path = Path(settings.models_dir) / best_artifact
-    if not best_model_path.exists():
-        raise FileNotFoundError(f"Model artifact missing: {best_model_path}")
-
-    # Stable production alias
-    prod_dir = ensure_dir(settings.models_dir)
-    prod_alias = Path(prod_dir) / "production_latest.joblib"
-    shutil.copy2(best_model_path, prod_alias)
-
-    # Update registry
-    registry_dir = ensure_dir(settings.registry_dir)
-    registry_path = Path(registry_dir) / "model_registry.json"
-    registry = _load_registry(registry_path)
-
-    entry = {
-        "name": best_name,
-        "artifact": best_artifact,
-        "metrics_file": best_metrics_path.name,
-        "primary_metric": settings.primary_metric,
-        "primary_score": _score(best_metrics, settings.primary_metric),
-        "promoted_at_utc": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+    meta = {
+        "promoted_from_model": best.model_path.name,
+        "promoted_from_metrics": best.metrics_path.name,
+        "metric_used": best.metric_name,
+        "score": best.score,
+        "production_model": str(prod_model),
+        "production_metrics": str(prod_metrics),
     }
 
-    registry["models"].append(entry)
-    registry["production"] = entry
-
-    _save_registry(registry_path, registry)
-
-    return prod_alias
-
-
-def parse_args() -> PromoteSettings:
-    cfg = load_config()
-    parser = argparse.ArgumentParser(description="Promote best churn model to production alias")
-    parser.add_argument("--models-dir", type=str, default=cfg["paths"]["models"])
-    parser.add_argument("--metrics-dir", type=str, default=cfg["paths"]["metrics"])
-    parser.add_argument("--registry-dir", type=str, default="artifacts/registry")
-
-    args = parser.parse_args()
-    primary = str(cfg.get("evaluation", {}).get("primary_metric", "pr_auc"))
-
-    return PromoteSettings(
-        models_dir=args.models_dir,
-        metrics_dir=args.metrics_dir,
-        registry_dir=args.registry_dir,
-        primary_metric=primary,
-    )
+    return meta
 
 
 def main():
     cfg = load_config()
-    logger = setup_logging(cfg)
-
-    settings = parse_args()
-
-    logger.info("Promoting best model using primary metric='%s'...", settings.primary_metric)
-    prod_path = promote(settings)
-    logger.info("Production alias updated ✅ -> %s", prod_path)
+    setup_logging(cfg)
+    meta = promote_model()
+    print(json.dumps(meta, indent=2))
 
 
 if __name__ == "__main__":

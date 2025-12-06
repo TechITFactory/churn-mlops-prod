@@ -1,0 +1,70 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: churn-seed-model
+  namespace: churn-mlops
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+
+      initContainers:
+        - name: init-dirs
+          image: busybox:1.36
+          command: ["sh", "-c", "mkdir -p /pvc/data /pvc/artifacts"]
+          volumeMounts:
+            - name: mlops-storage
+              mountPath: /pvc
+
+      containers:
+        - name: seed
+          image: techitfactory/churn-ml:0.1.0
+          imagePullPolicy: IfNotPresent
+
+          env:
+            - name: CHURN_MLOPS_CONFIG
+              value: /app/config/config.yaml
+
+          volumeMounts:
+            - name: config
+              mountPath: /app/config/config.yaml
+              subPath: config.yaml
+
+            - name: mlops-storage
+              mountPath: /app/data
+              subPath: data
+
+            - name: mlops-storage
+              mountPath: /app/artifacts
+              subPath: artifacts
+
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+
+              python -m churn_mlops.data.generate_synthetic
+              python -m churn_mlops.data.validate
+              python -m churn_mlops.data.prepare_dataset
+
+              python -m churn_mlops.features.build_features
+              python -m churn_mlops.training.build_labels
+              python -m churn_mlops.training.build_training_set
+
+              python -m churn_mlops.training.train_baseline
+              python -m churn_mlops.training.train_candidate || true
+
+              python -m churn_mlops.training.promote_model
+
+              python -m churn_mlops.inference.batch_score || true
+
+      volumes:
+        - name: config
+          configMap:
+            name: churn-mlops-config
+
+        - name: mlops-storage
+          persistentVolumeClaim:
+            claimName: churn-mlops-pvc

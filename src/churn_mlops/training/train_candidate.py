@@ -9,6 +9,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import (
     average_precision_score,
@@ -19,7 +20,6 @@ from sklearn.metrics import (
 )
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
-from sklearn.ensemble import HistGradientBoostingClassifier
 
 from churn_mlops.common.config import load_config
 from churn_mlops.common.logging import setup_logging
@@ -202,7 +202,9 @@ def train_candidate(settings: TrainSettings) -> Tuple[Path, Path, Dict[str, Any]
 
 def parse_args() -> TrainSettings:
     cfg = load_config()
-    parser = argparse.ArgumentParser(description="Train candidate churn model (HistGradientBoosting)")
+    parser = argparse.ArgumentParser(
+        description="Train candidate churn model (HistGradientBoosting)"
+    )
     parser.add_argument("--features-dir", type=str, default=cfg["paths"]["features"])
     parser.add_argument("--models-dir", type=str, default=cfg["paths"]["models"])
     parser.add_argument("--metrics-dir", type=str, default=cfg["paths"]["metrics"])
@@ -228,7 +230,9 @@ def main():
 
     logger.info("Model saved ✅ -> %s", model_path)
     logger.info("Metrics saved ✅ -> %s", metrics_path)
-    logger.info("PR-AUC: %.4f | ROC-AUC: %.4f", meta["metrics"]["pr_auc"], meta["metrics"]["roc_auc"])
+    logger.info(
+        "PR-AUC: %.4f | ROC-AUC: %.4f", meta["metrics"]["pr_auc"], meta["metrics"]["roc_auc"]
+    )
 
 
 if __name__ == "__main__":

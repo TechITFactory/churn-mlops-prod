@@ -1,8 +1,7 @@
 import argparse
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Optional, Tuple
 
 import joblib
 import pandas as pd
@@ -84,16 +83,20 @@ def _split_X(day_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     - X for model
     - meta columns for output
     """
-    meta_cols = [c for c in [
-        "user_id",
-        "as_of_date",
-        "plan",
-        "is_paid",
-        "country",
-        "marketing_source",
-        "days_since_signup",
-        "days_since_last_activity",
-    ] if c in day_df.columns]
+    meta_cols = [
+        c
+        for c in [
+            "user_id",
+            "as_of_date",
+            "plan",
+            "is_paid",
+            "country",
+            "marketing_source",
+            "days_since_signup",
+            "days_since_last_activity",
+        ]
+        if c in day_df.columns
+    ]
 
     meta = day_df[meta_cols].copy()
 
@@ -161,7 +164,9 @@ def batch_score(settings: BatchScoreSettings) -> Path:
 def parse_args() -> BatchScoreSettings:
     cfg = load_config()
 
-    parser = argparse.ArgumentParser(description="Batch churn scoring using production_latest model")
+    parser = argparse.ArgumentParser(
+        description="Batch churn scoring using production_latest model"
+    )
     parser.add_argument("--features-dir", type=str, default=cfg["paths"]["features"])
     parser.add_argument("--models-dir", type=str, default=cfg["paths"]["models"])
 
@@ -169,7 +174,9 @@ def parse_args() -> BatchScoreSettings:
     default_pred = cfg.get("paths", {}).get("predictions", "data/predictions")
     parser.add_argument("--predictions-dir", type=str, default=default_pred)
 
-    parser.add_argument("--as-of-date", type=str, default=None, help="YYYY-MM-DD; default=latest available")
+    parser.add_argument(
+        "--as-of-date", type=str, default=None, help="YYYY-MM-DD; default=latest available"
+    )
     parser.add_argument("--top-k", type=int, default=50, help="also writes a small top-K file")
 
     args = parser.parse_args()

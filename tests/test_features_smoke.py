@@ -1,7 +1,9 @@
-import pandas as pd
 from pathlib import Path
 
+import pandas as pd
+
 from churn_mlops.features.build_features import build_features
+
 
 def test_build_features_creates_file(tmp_path):
     # Use real project processed file if present; otherwise skip

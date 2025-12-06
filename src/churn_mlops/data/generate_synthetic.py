@@ -11,7 +11,6 @@ from churn_mlops.common.config import load_config
 from churn_mlops.common.logging import setup_logging
 from churn_mlops.common.utils import ensure_dir
 
-
 EVENT_TYPES = [
     "login",
     "course_enroll",
@@ -66,7 +65,9 @@ def _build_users(rng: np.random.Generator, settings: GeneratorSettings) -> pd.Da
     plan = np.where(is_paid, "paid", "free")
 
     countries = _random_choice(rng, ["IN", "US", "UK", "CA", "AU", "SG"], settings.n_users)
-    sources = _random_choice(rng, ["organic", "referral", "ads", "youtube", "community"], settings.n_users)
+    sources = _random_choice(
+        rng, ["organic", "referral", "ads", "youtube", "community"], settings.n_users
+    )
 
     # A latent engagement score: higher means more active / less likely to churn
     engagement = rng.beta(a=2.0, b=2.5, size=settings.n_users)
@@ -282,7 +283,9 @@ def build_events(
     return events
 
 
-def write_outputs(users: pd.DataFrame, events: pd.DataFrame, settings: GeneratorSettings) -> Tuple[Path, Path]:
+def write_outputs(
+    users: pd.DataFrame, events: pd.DataFrame, settings: GeneratorSettings
+) -> Tuple[Path, Path]:
     out_dir = ensure_dir(settings.output_dir)
 
     users_path = out_dir / "users.csv"

@@ -1,18 +1,20 @@
-.PHONY: help setup lint format test data features labels train promote batch all
+.PHONY: help setup lint lint-fix format format-check test data features labels train promote batch all
 
 help:
 	@echo "Targets:"
-	@echo "  setup     - install dev + api deps"
-	@echo "  lint      - ruff check"
-	@echo "  format    - black format"
-	@echo "  test      - pytest"
-	@echo "  data      - generate + validate + prepare"
-	@echo "  features  - build features"
-	@echo "  labels    - build labels + training set"
-	@echo "  train     - train baseline + candidate"
-	@echo "  promote   - promote best model"
-	@echo "  batch     - batch score using production model"
-	@echo "  all       - full local run"
+	@echo "  setup         - install dev + api deps"
+	@echo "  lint          - ruff check"
+	@echo "  lint-fix      - ruff auto-fix (imports etc.)"
+	@echo "  format        - black format"
+	@echo "  format-check  - black --check"
+	@echo "  test          - pytest"
+	@echo "  data          - generate + validate + prepare"
+	@echo "  features      - build features"
+	@echo "  labels        - build labels + training set"
+	@echo "  train         - train baseline + candidate"
+	@echo "  promote       - promote best model"
+	@echo "  batch         - batch score using production model"
+	@echo "  all           - full local run"
 
 setup:
 	pip install -r requirements/dev.txt
@@ -22,8 +24,14 @@ setup:
 lint:
 	ruff check .
 
+lint-fix:
+	ruff check . --fix
+
 format:
 	black .
+
+format-check:
+	black --check .
 
 test:
 	pytest -q

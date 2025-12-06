@@ -1,0 +1,60 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: churn-batch-score
+  namespace: churn-mlops
+spec:
+  schedule: "0 2 * * *"
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+
+          initContainers:
+            - name: init-dirs
+              image: busybox:1.36
+              command: ["sh", "-c", "mkdir -p /pvc/data /pvc/artifacts"]
+              volumeMounts:
+                - name: mlops-storage
+                  mountPath: /pvc
+
+          containers:
+            - name: churn-batch
+              image: techitfactory/churn-ml:0.1.0
+              imagePullPolicy: IfNotPresent
+
+              env:
+                - name: CHURN_MLOPS_CONFIG
+                  value: /app/config/config.yaml
+
+              volumeMounts:
+                - name: config
+                  mountPath: /app/config/config.yaml
+                  subPath: config.yaml
+
+                - name: mlops-storage
+                  mountPath: /app/data
+                  subPath: data
+
+                - name: mlops-storage
+                  mountPath: /app/artifacts
+                  subPath: artifacts
+
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  python -m churn_mlops.inference.batch_score
+
+          volumes:
+            - name: config
+              configMap:
+                name: churn-mlops-config
+
+            - name: mlops-storage
+              persistentVolumeClaim:
+                claimName: churn-mlops-pvc

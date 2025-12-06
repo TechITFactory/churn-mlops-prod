@@ -1,7 +1,6 @@
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
 
 import pandas as pd
 
@@ -41,7 +40,9 @@ def build_training_set(processed_dir: str, features_dir: str, output_dir: str) -
     features["as_of_date"] = pd.to_datetime(features["as_of_date"], errors="coerce").dt.date
     labels["as_of_date"] = pd.to_datetime(labels["as_of_date"], errors="coerce").dt.date
 
-    df = features.merge(labels[["user_id", "as_of_date", "churn_label"]], on=["user_id", "as_of_date"], how="inner")
+    df = features.merge(
+        labels[["user_id", "as_of_date", "churn_label"]], on=["user_id", "as_of_date"], how="inner"
+    )
 
     # Drop obvious non-feature columns if present
     drop_cols = {"future_active_days"}
@@ -61,7 +62,9 @@ def build_training_set(processed_dir: str, features_dir: str, output_dir: str) -
 
 def parse_args() -> TrainingSetSettings:
     cfg = load_config()
-    parser = argparse.ArgumentParser(description="Build training dataset by joining features and labels")
+    parser = argparse.ArgumentParser(
+        description="Build training dataset by joining features and labels"
+    )
     parser.add_argument("--processed-dir", type=str, default=cfg["paths"]["processed"])
     parser.add_argument("--features-dir", type=str, default=cfg["paths"]["features"])
     parser.add_argument("--output-dir", type=str, default=cfg["paths"]["features"])
@@ -81,11 +84,18 @@ def main():
     settings = parse_args()
 
     logger.info("Building training dataset...")
-    out_path = build_training_set(settings.processed_dir, settings.features_dir, settings.output_dir)
+    out_path = build_training_set(
+        settings.processed_dir, settings.features_dir, settings.output_dir
+    )
 
     df = pd.read_csv(out_path)
     logger.info("Training dataset written ✅ -> %s", out_path)
-    logger.info("Rows=%d | Users=%d | Churn rate=%.4f", len(df), df["user_id"].nunique(), df["churn_label"].mean() if len(df) else 0.0)
+    logger.info(
+        "Rows=%d | Users=%d | Churn rate=%.4f",
+        len(df),
+        df["user_id"].nunique(),
+        df["churn_label"].mean() if len(df) else 0.0,
+    )
 
 
 if __name__ == "__main__":

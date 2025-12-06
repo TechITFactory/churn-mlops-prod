@@ -1,7 +1,7 @@
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
@@ -25,16 +25,11 @@ def _read_user_daily(processed_dir: str) -> pd.DataFrame:
 
 
 def _compute_future_active_sum(active: np.ndarray, window: int) -> np.ndarray:
-    """
-    For each index i, compute sum(active[i+1 : i+window+1]).
-    Uses cumulative sum for O(n).
-    """
     n = len(active)
     cs = np.zeros(n + 1, dtype=np.int64)
     cs[1:] = np.cumsum(active.astype(np.int64))
 
     out = np.zeros(n, dtype=np.int64)
-    # future window ends at i+window (inclusive), slice is (i+1 .. i+window)
     for i in range(n):
         start = i + 1
         end = min(n, i + window + 1)
@@ -59,19 +54,14 @@ def build_labels(user_daily: pd.DataFrame, churn_window_days: int) -> pd.DataFra
     d = d.sort_values(["user_id", "as_of_date"]).reset_index(drop=True)
 
     labels = []
-    for uid, g in d.groupby("user_id", sort=False):
+    for _uid, g in d.groupby("user_id", sort=False):
         active = g["is_active_day"].to_numpy()
         future_sum = _compute_future_active_sum(active, churn_window_days)
 
         tmp = g[["user_id", "as_of_date"]].copy()
         tmp["future_active_days"] = future_sum
-
-        # Label rule:
-        # churn=1 if next window has zero active days
         tmp["churn_label"] = (tmp["future_active_days"] == 0).astype(int)
 
-        # We only trust labels where the full future window is available.
-        # So drop the last 'window' days for each user.
         if len(tmp) > churn_window_days:
             tmp = tmp.iloc[:-churn_window_days]
         else:
@@ -79,8 +69,10 @@ def build_labels(user_daily: pd.DataFrame, churn_window_days: int) -> pd.DataFra
 
         labels.append(tmp)
 
-    out = pd.concat(labels, ignore_index=True) if labels else pd.DataFrame(
-        columns=["user_id", "as_of_date", "future_active_days", "churn_label"]
+    out = (
+        pd.concat(labels, ignore_index=True)
+        if labels
+        else pd.DataFrame(columns=["user_id", "as_of_date", "future_active_days", "churn_label"])
     )
 
     out["as_of_date"] = pd.to_datetime(out["as_of_date"]).dt.date
@@ -126,7 +118,11 @@ def main():
 
     out_path = write_labels(labels, settings.processed_dir)
     logger.info("Labels written ✅ -> %s", out_path)
-    logger.info("Label rows: %d | churn rate (mean): %.4f", len(labels), labels["churn_label"].mean() if len(labels) else 0.0)
+    logger.info(
+        "Label rows: %d | churn rate (mean): %.4f",
+        len(labels),
+        labels["churn_label"].mean() if len(labels) else 0.0,
+    )
 
 
 if __name__ == "__main__":

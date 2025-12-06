@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: churn-mlops-config
+  namespace: churn-mlops
+data:
+  config.yaml: |
+    app:
+      name: churn-mlops
+      log_level: INFO
+
+    paths:
+      data: /app/data
+      raw: /app/data/raw
+      processed: /app/data/processed
+      features: /app/data/features
+      predictions: /app/data/predictions
+
+      artifacts: /app/artifacts
+      models: /app/artifacts/models
+      metrics: /app/artifacts/metrics
+
+    features:
+      windows_days: [7, 14, 30]
+
+    churn:
+      window_days: 30

@@ -7,8 +7,6 @@ import pandas as pd
 
 from churn_mlops.common.config import load_config
 from churn_mlops.common.logging import setup_logging
-from churn_mlops.common.utils import ensure_dir
-
 
 EVENT_TYPES: Set[str] = {
     "login",
@@ -161,7 +159,9 @@ def validate_events(events: pd.DataFrame, users: pd.DataFrame) -> ValidationResu
     if len(nonpay_amt_present) > 0:
         ratio = len(nonpay_amt_present) / max(1, len(events))
         if ratio > 0.02:
-            errors.append("events: too many non-payment events with amount value (possible data contamination)")
+            errors.append(
+                "events: too many non-payment events with amount value (possible data contamination)"
+            )
 
     return ValidationResult(ok=len(errors) == 0, errors=errors)
 

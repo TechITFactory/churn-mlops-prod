@@ -1,7 +1,7 @@
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
@@ -91,10 +91,9 @@ def _build_user_day_grid(users: pd.DataFrame, events: pd.DataFrame) -> pd.DataFr
     date_range = pd.date_range(min_day, max_day, freq="D")
 
     # Cartesian product
-    grid = (
-        pd.MultiIndex.from_product([users["user_id"].astype(int).tolist(), date_range], names=["user_id", "as_of_date"])
-        .to_frame(index=False)
-    )
+    grid = pd.MultiIndex.from_product(
+        [users["user_id"].astype(int).tolist(), date_range], names=["user_id", "as_of_date"]
+    ).to_frame(index=False)
     grid["as_of_date"] = pd.to_datetime(grid["as_of_date"]).dt.date
     return grid
 
@@ -132,11 +131,15 @@ def _daily_aggregates(events: pd.DataFrame) -> pd.DataFrame:
                 "as_of_date": day,
                 "logins_count": _count_type(df, "login"),
                 "enroll_count": _count_type(df, "course_enroll"),
-                "watch_minutes_sum": float(df.loc[df["event_type"] == "video_watch", "watch_minutes"].sum()),
+                "watch_minutes_sum": float(
+                    df.loc[df["event_type"] == "video_watch", "watch_minutes"].sum()
+                ),
                 "quiz_attempts_count": _count_type(df, "quiz_attempt"),
-                "quiz_avg_score": float(df.loc[df["event_type"] == "quiz_attempt", "quiz_score"].mean())
-                if (df["event_type"] == "quiz_attempt").any()
-                else np.nan,
+                "quiz_avg_score": (
+                    float(df.loc[df["event_type"] == "quiz_attempt", "quiz_score"].mean())
+                    if (df["event_type"] == "quiz_attempt").any()
+                    else np.nan
+                ),
                 "payment_success_count": _count_type(df, "payment_success"),
                 "payment_failed_count": _count_type(df, "payment_failed"),
                 "support_ticket_count": _count_type(df, "support_ticket"),
@@ -223,7 +226,9 @@ def build_user_daily(users: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
     return merged
 
 
-def write_processed(users: pd.DataFrame, events: pd.DataFrame, user_daily: pd.DataFrame, processed_dir: str):
+def write_processed(
+    users: pd.DataFrame, events: pd.DataFrame, user_daily: pd.DataFrame, processed_dir: str
+):
     out_dir = ensure_dir(processed_dir)
 
     users.to_csv(Path(out_dir) / "users_clean.csv", index=False)
@@ -257,7 +262,9 @@ def main():
 
     # Filter events to known users only
     known_users = set(users_clean["user_id"].astype(int).tolist())
-    events_clean = events_clean[events_clean["user_id"].astype(int).isin(known_users)].reset_index(drop=True)
+    events_clean = events_clean[events_clean["user_id"].astype(int).isin(known_users)].reset_index(
+        drop=True
+    )
 
     logger.info("Building user_daily activity table...")
     user_daily = build_user_daily(users_clean, events_clean)
@@ -269,7 +276,12 @@ def main():
     logger.info("users_clean: %s", Path(settings.processed_dir) / "users_clean.csv")
     logger.info("events_clean: %s", Path(settings.processed_dir) / "events_clean.csv")
     logger.info("user_daily: %s", Path(settings.processed_dir) / "user_daily.csv")
-    logger.info("Rows: users=%d events=%d user_daily=%d", len(users_clean), len(events_clean), len(user_daily))
+    logger.info(
+        "Rows: users=%d events=%d user_daily=%d",
+        len(users_clean),
+        len(events_clean),
+        len(user_daily),
+    )
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict
 
+
 def setup_logging(cfg: Dict[str, Any]) -> logging.Logger:
     log_cfg = cfg.get("logging", {})
     level = str(log_cfg.get("level", "INFO")).upper()

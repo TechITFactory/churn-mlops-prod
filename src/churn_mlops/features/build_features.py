@@ -41,7 +41,6 @@ def _prep_base(df: pd.DataFrame) -> pd.DataFrame:
     d["user_id"] = pd.to_numeric(d["user_id"], errors="coerce").astype(int)
     d["as_of_date"] = pd.to_datetime(d["as_of_date"], errors="coerce")
 
-    # Ensure key numeric columns exist
     numeric_cols = [
         "total_events",
         "logins_count",
@@ -58,17 +57,14 @@ def _prep_base(df: pd.DataFrame) -> pd.DataFrame:
         if c not in d.columns:
             d[c] = 0
 
-    # Quiz avg score can be NaN
     if "quiz_avg_score" not in d.columns:
         d["quiz_avg_score"] = np.nan
 
-    # Clean types
     for c in numeric_cols:
         d[c] = pd.to_numeric(d[c], errors="coerce").fillna(0)
 
     d["quiz_avg_score"] = pd.to_numeric(d["quiz_avg_score"], errors="coerce")
 
-    # Sort for rolling
     d = d.sort_values(["user_id", "as_of_date"]).reset_index(drop=True)
     return d
 
@@ -83,26 +79,12 @@ def _add_days_since_last_activity(d: pd.DataFrame) -> pd.DataFrame:
     )
     x["last_active_dt"] = pd.to_datetime(x["last_active_dt"], errors="coerce")
 
-    # Forward fill last active date within each user
     x["last_active_dt"] = x.groupby("user_id")["last_active_dt"].ffill()
 
-    # Compute delta
     delta = (x["as_of_date"] - x["last_active_dt"]).dt.days
-
-    # Before first activity, last_active_dt is NaT -> delta NaN
-    # We replace with days_since_signup for a reasonable fallback
     x["days_since_last_activity"] = delta.fillna(x["days_since_signup"]).clip(lower=0)
 
-    x = x.drop(columns=["last_active_dt"])
-    return x
-
-
-def _rolling_sum(group: pd.DataFrame, col: str, window: int) -> pd.Series:
-    return group[col].rolling(window=window, min_periods=1).sum()
-
-
-def _rolling_mean(group: pd.DataFrame, col: str, window: int) -> pd.Series:
-    return group[col].rolling(window=window, min_periods=1).mean()
+    return x.drop(columns=["last_active_dt"])
 
 
 def _add_rolling_features(d: pd.DataFrame, windows: List[int]) -> pd.DataFrame:
@@ -120,11 +102,8 @@ def _add_rolling_features(d: pd.DataFrame, windows: List[int]) -> pd.DataFrame:
         "support_ticket_count",
     ]
 
-    # Create rolling sums
     for w in windows:
         for col in base_sum_cols:
-            out_col = f"{col.replace('_count','').replace('_sum','')}_{w}d"
-            # keep naming intuitive
             if col == "is_active_day":
                 out_col = f"active_days_{w}d"
             elif col == "total_events":
@@ -132,19 +111,26 @@ def _add_rolling_features(d: pd.DataFrame, windows: List[int]) -> pd.DataFrame:
             elif col == "watch_minutes_sum":
                 out_col = f"watch_minutes_{w}d"
             elif col.endswith("_count"):
-                out_col = f"{col.replace('_count','')}_{w}d"
+                out_col = f"{col.replace('_count', '')}_{w}d"
+            else:
+                out_col = f"{col}_{w}d"
 
-            x[out_col] = (
-                x.groupby("user_id", group_keys=False)
-                .apply(lambda g: _rolling_sum(g, col, w))
-                .astype(float)
+            rolled = (
+                x.groupby("user_id")[col]
+                .rolling(window=w, min_periods=1)
+                .sum()
+                .reset_index(level=0, drop=True)
             )
+            x[out_col] = rolled.astype(float)
 
         # Rolling mean quiz score
-        x[f"quiz_avg_score_{w}d"] = (
-            x.groupby("user_id", group_keys=False)
-            .apply(lambda g: _rolling_mean(g, "quiz_avg_score", w))
+        rolled_mean = (
+            x.groupby("user_id")["quiz_avg_score"]
+            .rolling(window=w, min_periods=1)
+            .mean()
+            .reset_index(level=0, drop=True)
         )
+        x[f"quiz_avg_score_{w}d"] = rolled_mean
 
     # Payment fail rate (use 30d if exists, else largest window)
     w_ref = 30 if 30 in windows else max(windows)
@@ -163,7 +149,6 @@ def build_features(processed_dir: str, features_dir: str, windows: List[int]) ->
     df = _add_days_since_last_activity(df)
     df = _add_rolling_features(df, windows)
 
-    # Keep only useful columns for modeling layer (we still keep identifiers + dates)
     keep_static = [
         "user_id",
         "as_of_date",
@@ -177,11 +162,11 @@ def build_features(processed_dir: str, features_dir: str, windows: List[int]) ->
     if "engagement_score" in df.columns:
         keep_static.append("engagement_score")
 
-    # Select engineered columns
-    engineered = [c for c in df.columns if c.endswith("d") or c.startswith("days_since_last_activity")]
+    engineered = [
+        c for c in df.columns if c.endswith("d") or c.startswith("days_since_last_activity")
+    ]
     engineered = sorted(set(engineered))
 
-    # Always keep base daily signals too (useful for debugging)
     base_daily = [
         "is_active_day",
         "total_events",
@@ -196,7 +181,7 @@ def build_features(processed_dir: str, features_dir: str, windows: List[int]) ->
     ]
     base_daily = [c for c in base_daily if c in df.columns]
 
-    final_cols = []
+    final_cols: List[str] = []
     for c in keep_static + base_daily + engineered:
         if c in df.columns and c not in final_cols:
             final_cols.append(c)

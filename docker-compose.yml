@@ -1,0 +1,13 @@
+version: "3.9"
+
+services:
+  churn-api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    ports:
+      - "8000:8000"
+    # For demo only: mount artifacts if you want live model swap
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./data:/app/data
