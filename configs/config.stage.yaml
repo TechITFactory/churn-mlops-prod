@@ -1,0 +1,6 @@
+training:
+  model_type: "candidate"
+
+logging:
+  level: INFO
+  to_file: true

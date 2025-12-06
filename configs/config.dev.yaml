@@ -1,0 +1,5 @@
+training:
+  model_type: "baseline"
+
+logging:
+  level: DEBUG

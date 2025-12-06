@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Virtual env
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Data (keep structure)
+data/raw/*
+data/processed/*
+data/features/*
+data/predictions/*
+!data/**/.gitkeep
+
+# Artifacts
+artifacts/models/*
+artifacts/metrics/*
+artifacts/reports/*
+!artifacts/**/.gitkeep
+
+# Env files
+.env

@@ -1,0 +1,36 @@
+{
+  "models": [
+    {
+      "name": "candidate_hgb",
+      "artifact": "candidate_hgb_20251206T124445Z.joblib",
+      "metrics_file": "candidate_hgb_20251206T124445Z.json",
+      "primary_metric": "pr_auc",
+      "primary_score": 0.9369965707522319,
+      "promoted_at_utc": "2025-12-06T12:47:39Z"
+    },
+    {
+      "name": "candidate_hgb",
+      "artifact": "candidate_hgb_20251206T130020Z.joblib",
+      "metrics_file": "candidate_hgb_20251206T130020Z.json",
+      "primary_metric": "pr_auc",
+      "primary_score": 0.9369965707522319,
+      "promoted_at_utc": "2025-12-06T13:00:21Z"
+    },
+    {
+      "name": "candidate_hgb",
+      "artifact": "candidate_hgb_20251206T131459Z.joblib",
+      "metrics_file": "candidate_hgb_20251206T131459Z.json",
+      "primary_metric": "pr_auc",
+      "primary_score": 0.9369965707522319,
+      "promoted_at_utc": "2025-12-06T13:15:01Z"
+    }
+  ],
+  "production": {
+    "name": "candidate_hgb",
+    "artifact": "candidate_hgb_20251206T131459Z.joblib",
+    "metrics_file": "candidate_hgb_20251206T131459Z.json",
+    "primary_metric": "pr_auc",
+    "primary_score": 0.9369965707522319,
+    "promoted_at_utc": "2025-12-06T13:15:01Z"
+  }
+}

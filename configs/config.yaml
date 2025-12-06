@@ -1,0 +1,32 @@
+app:
+  name: techitfactory-churn-mlops
+  version: 0.1.0
+
+paths:
+  raw: data/raw
+  processed: data/processed
+  features: data/features
+  predictions: data/predictions
+  models: artifacts/models
+  metrics: artifacts/metrics
+  reports: artifacts/reports
+
+churn:
+  window_days: 30
+  as_of_date_column: "as_of_date"
+
+training:
+  random_state: 42
+  test_size: 0.2
+  model_type: "baseline"   # baseline | candidate | production
+  imbalance_strategy: "class_weight"  # class_weight | oversample
+  positive_label: 1
+
+evaluation:
+  primary_metric: "pr_auc"
+  threshold: 0.5
+
+logging:
+  level: INFO
+  to_file: false
+  file_path: logs/app.log

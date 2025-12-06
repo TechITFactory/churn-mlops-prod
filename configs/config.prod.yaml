@@ -1,0 +1,9 @@
+training:
+  model_type: "production"
+
+evaluation:
+  threshold: 0.6
+
+logging:
+  level: WARNING
+  to_file: true
