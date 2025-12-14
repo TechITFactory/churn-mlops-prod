@@ -1,9 +1,23 @@
 # Staging environment values
 # Override default values for staging deployment
 
-image:
-  tag: "staging"
-  pullPolicy: Always
+# Global replica count
+replicaCount: 1
+
+# Image configuration
+images:
+  api:
+    repository: techitfactory/churn-api
+    tag: "staging"
+    pullPolicy: Always
+  ml:
+    repository: techitfactory/churn-ml
+    tag: "staging"
+    pullPolicy: Always
+  busybox:
+    repository: busybox
+    tag: "1.36"
+    pullPolicy: IfNotPresent
 
 # Persistent Volume Claim configuration
 pvc:
@@ -15,6 +29,34 @@ pvc:
 # ConfigMap configuration
 configMap:
   name: churn-mlops-config-staging
+
+# Service configuration
+service:
+  name: churn-mlops-api-staging
+  port: 80
+  type: ClusterIP
+
+# Resource configuration
+resources:
+  api:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  ml:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
+
+# Seed job configuration
+seedJob:
+  enabled: true
+  backoffLimit: 1
 
 api:
   replicaCount: 1
@@ -31,14 +73,6 @@ api:
         hosts:
           - churn-api-staging.example.com
   
-  resources:
-    limits:
-      cpu: 500m
-      memory: 512Mi
-    requests:
-      cpu: 250m
-      memory: 256Mi
-  
   autoscaling:
     enabled: false
   
@@ -50,14 +84,9 @@ api:
     - name: ENVIRONMENT
       value: staging
 
+# ML jobs configuration (not API resources)
 ml:
-  resources:
-    limits:
-      cpu: 1000m
-      memory: 2Gi
-    requests:
-      cpu: 500m
-      memory: 1Gi
+  enabled: true
 
 # Less frequent jobs in staging
 batchScore:
