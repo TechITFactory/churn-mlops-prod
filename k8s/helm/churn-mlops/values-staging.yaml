@@ -12,6 +12,10 @@ pvc:
     - ReadWriteOnce
   size: 10Gi
 
+# ConfigMap configuration
+configMap:
+  name: churn-mlops-config-staging
+
 api:
   replicaCount: 1
   
