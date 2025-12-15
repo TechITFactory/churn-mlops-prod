@@ -1,9 +1,23 @@
 # Production environment values
 # Override default values for production deployment
 
-image:
-  tag: "v1.0.0"  # Will be updated by CD pipeline
-  pullPolicy: IfNotPresent
+# Global replica count
+replicaCount: 3
+
+# Image configuration
+images:
+  api:
+    repository: techitfactory/churn-api
+    tag: "v1.0.0"  # Will be updated by CD pipeline
+    pullPolicy: IfNotPresent
+  ml:
+    repository: techitfactory/churn-ml
+    tag: "v1.0.0"
+    pullPolicy: IfNotPresent
+  busybox:
+    repository: busybox
+    tag: "1.36"
+    pullPolicy: IfNotPresent
 
 # Persistent Volume Claim configuration
 pvc:
@@ -11,6 +25,37 @@ pvc:
   accessModes:
     - ReadWriteOnce
   size: 50Gi
+
+# ConfigMap configuration
+configMap:
+  name: churn-mlops-config-prod
+
+# Service configuration
+service:
+  name: churn-mlops-api-prod
+  port: 8000
+  type: ClusterIP
+
+# Resource configuration
+resources:
+  api:
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+    requests:
+      cpu: 1000m
+      memory: 1Gi
+  ml:
+    limits:
+      cpu: 4000m
+      memory: 8Gi
+    requests:
+      cpu: 2000m
+      memory: 4Gi
+
+# Seed job configuration
+seedJob:
+  enabled: false
 
 api:
   replicaCount: 3
@@ -33,14 +78,6 @@ api:
         hosts:
           - churn-api.example.com
   
-  resources:
-    limits:
-      cpu: 2000m
-      memory: 2Gi
-    requests:
-      cpu: 1000m
-      memory: 1Gi
-  
   autoscaling:
     enabled: true
     minReplicas: 3
@@ -58,14 +95,9 @@ api:
     - name: MAX_WORKERS
       value: "4"
 
+# ML jobs configuration
 ml:
-  resources:
-    limits:
-      cpu: 4000m
-      memory: 8Gi
-    requests:
-      cpu: 2000m
-      memory: 4Gi
+  enabled: true
 
 # Production job schedules
 batchScore:

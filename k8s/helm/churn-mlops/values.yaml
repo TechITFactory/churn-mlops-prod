@@ -14,6 +14,71 @@ images:
     tag: "1.36"
     pullPolicy: IfNotPresent
 
+# Persistent Volume Claim configuration
+pvc:
+  name: churn-mlops-data
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi
+
+# ConfigMap configuration
+configMap:
+  name: churn-mlops-config
+
+# Service configuration
+service:
+  name: churn-mlops-api
+  port: 8000
+  type: ClusterIP
+
+# Resource configuration
+resources:
+  api:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+  ml:
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+
 seedJob:
   enabled: true
   backoffLimit: 1
+
+api:
+  replicaCount: 2
+  
+  ingress:
+    enabled: false
+    hosts:
+      - host: churn-api.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+  
+  autoscaling:
+    enabled: false
+  
+  env:
+    - name: CHURN_MLOPS_CONFIG
+      value: /app/config/config.yaml
+    - name: LOG_LEVEL
+      value: INFO
+    - name: ENVIRONMENT
+      value: development
+
+# ML jobs configuration
+ml:
+  enabled: true
+
+# Batch scoring configuration
+batchScore:
+  enabled: true

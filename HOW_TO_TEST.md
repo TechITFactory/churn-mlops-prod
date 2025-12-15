@@ -47,8 +47,8 @@ pip install -e .
 make test
 
 # 4. Build Docker images
-docker build -f docker/Dockerfile.api -t test:api .
-docker build -f docker/Dockerfile.ml -t test:ml .
+docker build -f docker/Dockerfile.api -t techitfactory/churn-api:staging .
+docker build -f docker/Dockerfile.ml -t techitfactory/churn-ml:staging .
 
 # 5. Validate Helm
 helm lint k8s/helm/churn-mlops/
