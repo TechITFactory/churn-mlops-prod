@@ -11,20 +11,35 @@ spec:
     spec:
       template:
         spec:
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            fsGroup: 0
           restartPolicy: Never
 
           initContainers:
             - name: init-dirs
               image: busybox:1.36
-              command: ["sh", "-c", "mkdir -p /pvc/data /pvc/artifacts"]
+              command:
+                - sh
+                - -c
+                - |
+                  mkdir -p /pvc/data/predictions /pvc/data/raw /pvc/data/processed /pvc/data/features
+                  mkdir -p /pvc/artifacts/models /pvc/artifacts/metrics
+                  chmod -R 777 /pvc
               volumeMounts:
                 - name: mlops-storage
                   mountPath: /pvc
 
           containers:
             - name: churn-batch
-              image: techitfactory/churn-ml:0.1.0
+              image: techitfactory/churn-ml:dec22
               imagePullPolicy: IfNotPresent
+              securityContext:
+                runAsUser: 0
+                runAsGroup: 0
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: false
 
               env:
                 - name: CHURN_MLOPS_CONFIG

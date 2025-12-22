@@ -25,7 +25,7 @@ spec:
 
       containers:
         - name: churn-api
-          image: techitfactory/churn-api:0.1.4
+          image: techitfactory/churn-api:dec22
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000

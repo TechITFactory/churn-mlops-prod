@@ -46,8 +46,36 @@ def _load_model_or_raise(cfg: Dict[str, Any]):
         raise FileNotFoundError(
             f"Missing production model alias: {model_path}. Run promote step (or seed job) first."
         )
-    _model = joblib.load(model_path)
-    _model_meta = {"model_path": str(model_path)}
+    blob = joblib.load(model_path)
+
+    # Support saved dicts (our training code wraps artifacts)
+    if isinstance(blob, dict) and "model" in blob:
+        _model = blob["model"]
+        _model_meta = {"model_path": str(model_path), **{k: v for k, v in blob.items() if k != "model"}}
+    else:
+        _model = blob
+        _model_meta = {"model_path": str(model_path)}
+
+
+def _prepare_request_features(features: Dict[str, Any]) -> pd.DataFrame:
+    """Ensure all expected model columns exist with sensible defaults."""
+    x = pd.DataFrame([features])
+
+    cat_cols = _model_meta.get("cat_cols", [])
+    num_cols = _model_meta.get("num_cols", [])
+
+    for col in cat_cols:
+        if col not in x.columns:
+            x[col] = "missing"
+        x[col] = x[col].astype(str)
+
+    for col in num_cols:
+        if col not in x.columns:
+            x[col] = 0.0
+        x[col] = pd.to_numeric(x[col], errors="coerce").fillna(0.0)
+
+    # Keep any extras; ColumnTransformer drops unknowns via remainder="drop"
+    return x
 
 
 @app.on_event("startup")
@@ -65,7 +93,7 @@ def startup_event():
 # Schemas
 # -------------------------
 class PredictRequest(BaseModel):
-    user_id: str = Field(..., description="Unique user id")
+    user_id: str | int = Field(..., description="Unique user id (string or int)")
     snapshot_date: Optional[str] = Field(None, description="Optional ISO date")
     # Allow mixed types (categorical + numeric) because the training pipeline
     # one-hot encodes categories and scales numerics under the hood.
@@ -122,14 +150,15 @@ def predict(req: PredictRequest):
         if _model is None:
             _load_model_or_raise(cfg)
         # Convert feature dict -> dataframe
-        x = pd.DataFrame([req.features])
+        x = _prepare_request_features(req.features)
         proba = float(_model.predict_proba(x)[:, 1])
         PREDICTION_COUNT.inc()
         return PredictResponse(
-            user_id=req.user_id,
+            user_id=str(req.user_id),
             churn_risk=proba,
             model_path=str(_production_model_path(cfg)),
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
 

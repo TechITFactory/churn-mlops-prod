@@ -7,14 +7,30 @@
       "primary_metric": "pr_auc",
       "primary_score": 0.9369965707522319,
       "promoted_at_utc": "2025-12-20T14:24:34Z"
+    },
+    {
+      "name": "candidate_hgb",
+      "artifact": "candidate_hgb_20251222T092336Z.joblib",
+      "metrics_file": "candidate_hgb_20251222T092336Z.json",
+      "primary_metric": "pr_auc",
+      "primary_score": 0.9369965707522319,
+      "promoted_at_utc": "2025-12-22T09:23:36Z"
+    },
+    {
+      "name": "candidate_hgb",
+      "artifact": "candidate_hgb_20251222T104035Z.joblib",
+      "metrics_file": "candidate_hgb_20251222T104035Z.json",
+      "primary_metric": "pr_auc",
+      "primary_score": 0.9369965707522319,
+      "promoted_at_utc": "2025-12-22T10:40:35Z"
     }
   ],
   "production": {
     "name": "candidate_hgb",
-    "artifact": "candidate_hgb_20251220T142434Z.joblib",
-    "metrics_file": "candidate_hgb_20251220T142434Z.json",
+    "artifact": "candidate_hgb_20251222T104035Z.joblib",
+    "metrics_file": "candidate_hgb_20251222T104035Z.json",
     "primary_metric": "pr_auc",
     "primary_score": 0.9369965707522319,
-    "promoted_at_utc": "2025-12-20T14:24:34Z"
+    "promoted_at_utc": "2025-12-22T10:40:35Z"
   }
 }

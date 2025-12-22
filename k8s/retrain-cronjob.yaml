@@ -12,6 +12,10 @@ spec:
       backoffLimit: 1
       template:
         spec:
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            fsGroup: 0
           restartPolicy: Never
 
           initContainers:
@@ -24,8 +28,8 @@ spec:
 
           containers:
             - name: retrain
-              image: techitfactory/churn-ml:0.1.2
-              imagePullPolicy: Always
+              image: techitfactory/churn-ml:dec22
+              imagePullPolicy: IfNotPresent
               env:
                 - name: CHURN_MLOPS_CONFIG
                   value: /app/config/config.yaml
