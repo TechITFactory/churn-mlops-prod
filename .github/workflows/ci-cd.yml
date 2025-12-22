@@ -1,0 +1,97 @@
+name: ci-cd
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+    tags: [ "v*" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements/dev.txt
+
+      - name: Lint and test
+        run: |
+          make lint
+          make test
+
+  build-and-push:
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Docker meta (tags)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            techitfactory/churn-ml
+            techitfactory/churn-api
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha
+          flavor: |
+            latest=false
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push churn-ml
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.ml
+          push: true
+          tags: techitfactory/churn-ml:${{ steps.meta.outputs.version }}
+
+      - name: Build and push churn-api
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.api
+          push: true
+          tags: techitfactory/churn-api:${{ steps.meta.outputs.version }}
+
+      # Optional: bump manifests with the new tag and push back to main.
+      # Uncomment and ensure GH_TOKEN has repo write if you want auto tag bumps.
+      # - name: Bump k8s manifests to new tag
+      #   if: github.ref == 'refs/heads/main'
+      #   env:
+      #     TAG: ${{ steps.meta.outputs.version }}
+      #     GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      #   run: |
+      #     git config user.name "gha-bot"
+      #     git config user.email "gha-bot@users.noreply.github.com"
+      #     yq -i '(.spec.template.spec.containers[] | select(.name=="churn-api").image) = "techitfactory/churn-api:'"$TAG"'"' k8s/api-deployment.yaml
+      #     yq -i '(.spec.jobTemplate.spec.template.spec.containers[] | select(.name=="churn-ml").image) = "techitfactory/churn-ml:'"$TAG"'"' k8s/batch-cronjob.yaml
+      #     yq -i '(.spec.jobTemplate.spec.template.spec.containers[] | select(.name=="churn-ml").image) = "techitfactory/churn-ml:'"$TAG"'"' k8s/drift-cronjob.yaml
+      #     yq -i '(.spec.jobTemplate.spec.template.spec.containers[] | select(.name=="churn-ml").image) = "techitfactory/churn-ml:'"$TAG"'"' k8s/retrain-cronjob.yaml
+      #     git add k8s/api-deployment.yaml k8s/batch-cronjob.yaml k8s/drift-cronjob.yaml k8s/retrain-cronjob.yaml
+      #     git commit -m "chore: deploy tag $TAG" || exit 0
+      #     git push origin main

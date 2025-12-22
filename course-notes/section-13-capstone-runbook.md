@@ -89,6 +89,44 @@ curl http://localhost:8000/ready
 
 ---
 
+### Path 4: EKS (Terraform + plain manifests)
+
+**Best for**: Cloud demo closest to production
+
+```bash
+# 1) Provision cluster
+cd terraform
+terraform init
+terraform apply -auto-approve
+
+# 2) Configure kubectl
+aws eks --region us-east-1 update-kubeconfig --name churn-mlops
+kubectl config set-context --current --namespace=churn-mlops
+
+# 3) Deploy plain manifests (no kustomize/helm)
+kubectl apply -f k8s/plain/namespace.yaml
+kubectl apply -f k8s/plain/pvc.yaml
+kubectl apply -f k8s/plain/configmap.yaml
+kubectl apply -f k8s/plain/seed-model-job.yaml
+
+# 4) Wait for seed job (generates data + baseline model)
+kubectl -n churn-mlops wait --for=condition=complete job/churn-seed-model --timeout=900s
+
+# 5) Deploy API and scheduled jobs
+kubectl apply -f k8s/plain/api-deployment.yaml
+kubectl apply -f k8s/plain/api-service.yaml
+kubectl apply -f k8s/batch-cronjob.yaml
+kubectl apply -f k8s/drift-cronjob.yaml
+kubectl apply -f k8s/retrain-cronjob.yaml
+
+# 6) Smoke-test API
+kubectl -n churn-mlops wait --for=condition=ready pod -l app=churn-api --timeout=180s
+kubectl -n churn-mlops port-forward svc/churn-api 8000:8000 &
+curl http://localhost:8000/ready
+```
+
+---
+
 ## Day 1: Initial Deployment
 
 ### Pre-requisites
@@ -135,6 +173,62 @@ curl http://localhost:8000/metrics
 kubectl apply -f k8s/drift-cronjob.yaml
 kubectl apply -f k8s/retrain-cronjob.yaml
 ```
+
+---
+
+## End-to-End Test: Data Generation → Retrain (EKS plain manifests)
+
+Use plain manifests for core objects, and root-level cronjobs: [k8s/plain/seed-model-job.yaml](k8s/plain/seed-model-job.yaml), [k8s/batch-cronjob.yaml](k8s/batch-cronjob.yaml), [k8s/drift-cronjob.yaml](k8s/drift-cronjob.yaml), [k8s/retrain-cronjob.yaml](k8s/retrain-cronjob.yaml).
+
+```bash
+# 0) Namespace, storage, config (if not already applied)
+kubectl apply -f k8s/plain/namespace.yaml
+kubectl apply -f k8s/plain/pvc.yaml
+kubectl apply -f k8s/plain/configmap.yaml
+
+# 1) Generate data + baseline model
+kubectl apply -f k8s/plain/seed-model-job.yaml
+kubectl -n churn-mlops wait --for=condition=complete job/churn-seed-model --timeout=900s
+
+# 2) Verify artifacts exist in the pod volume
+kubectl -n churn-mlops exec job/churn-seed-model -- ls -l /app/artifacts/models
+kubectl -n churn-mlops exec job/churn-seed-model -- ls -l /app/artifacts/metrics
+
+# 3) Deploy API (uses production_latest.joblib)
+kubectl apply -f k8s/plain/api-deployment.yaml
+kubectl apply -f k8s/plain/api-service.yaml
+kubectl -n churn-mlops wait --for=condition=ready pod -l app=churn-api --timeout=180s
+kubectl -n churn-mlops port-forward svc/churn-api 8000:8000 &
+curl http://localhost:8000/ready
+
+# 4) Run a one-off batch score (uses latest model)
+kubectl -n churn-mlops create job --from=cronjob/churn-batch-score churn-batch-manual-$(date +%s)
+kubectl -n churn-mlops wait --for=condition=complete job/churn-batch-manual-* --timeout=900s
+kubectl -n churn-mlops logs -l job-name=churn-batch-manual-* --tail=200
+
+# 5) Run drift check
+kubectl -n churn-mlops create job --from=cronjob/churn-drift-weekly churn-drift-manual-$(date +%s)
+kubectl -n churn-mlops wait --for=condition=complete job/churn-drift-manual-* --timeout=600s
+kubectl -n churn-mlops logs -l job-name=churn-drift-manual-* --tail=200
+kubectl -n churn-mlops exec deploy/churn-api -- cat /app/artifacts/metrics/data_drift_latest.json
+
+# 6) Trigger retrain (tests end-to-end from fresh data)
+kubectl -n churn-mlops create job --from=cronjob/churn-retrain-weekly churn-retrain-manual-$(date +%s)
+kubectl -n churn-mlops wait --for=condition=complete job/churn-retrain-manual-* --timeout=1200s
+kubectl -n churn-mlops logs -l job-name=churn-retrain-manual-* --tail=200
+kubectl -n churn-mlops exec deploy/churn-api -- cat /app/artifacts/metrics/production_latest.json
+
+# 7) Reload API to pick up the new model (if changed)
+kubectl -n churn-mlops rollout restart deployment/churn-api
+kubectl -n churn-mlops rollout status deployment/churn-api --timeout=180s
+
+# 8) Optional cleanup of manual jobs
+kubectl -n churn-mlops delete job -l job-name=churn-batch-manual-
+kubectl -n churn-mlops delete job -l job-name=churn-drift-manual-
+kubectl -n churn-mlops delete job -l job-name=churn-retrain-manual-
+```
+
+Monitoring is not wired into these steps yet; add Grafana/Prometheus wiring later once the deployment path is stable.
 
 ---
 

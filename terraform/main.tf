@@ -50,13 +50,27 @@ module "eks" {
   subnet_ids      = module.vpc.private_subnets
   vpc_id          = module.vpc.vpc_id
 
-  enable_irsa = true
+  # Make the API endpoint reachable from your machine (adjust CIDRs if you want to lock it down)
+  cluster_endpoint_public_access       = true
+  cluster_endpoint_public_access_cidrs = ["0.0.0.0/0"]
+  cluster_endpoint_private_access      = false
+
+  enable_irsa                            = true
+  enable_cluster_creator_admin_permissions = true
+
+  cluster_addons = {
+    aws-ebs-csi-driver = {
+      most_recent              = true
+      service_account_role_arn = module.ebs_csi_irsa.iam_role_arn
+    }
+  }
+
 
   eks_managed_node_groups = {
     default = {
-      desired_size = 1
-      min_size     = 1
-      max_size     = 2
+      desired_size = 2
+      min_size     = 2
+      max_size     = 3
 
       instance_types = [var.node_instance_type]
       capacity_type  = "ON_DEMAND"
@@ -65,6 +79,23 @@ module "eks" {
 
   tags = {
     Project = var.cluster_name
+  }
+}
+
+module "ebs_csi_irsa" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  version = "5.39.0"
+
+  role_name             = "${var.cluster_name}-ebs-csi"
+  attach_ebs_csi_policy = true
+
+  oidc_providers = {
+    main = {
+      provider_arn = module.eks.oidc_provider_arn
+      namespace_service_accounts = [
+        "kube-system:ebs-csi-controller-sa",
+      ]
+    }
   }
 }
 
@@ -81,3 +112,4 @@ output "cluster_certificate_authority_data" {
 }
 
 data "aws_availability_zones" "available" {}
+data "aws_caller_identity" "current" {}
