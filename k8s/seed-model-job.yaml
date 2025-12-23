@@ -29,7 +29,7 @@ spec:
 
       containers:
         - name: seed
-          image: techitfactory/churn-ml:dec22
+          image: techitfactory/churn-ml:sha-818eedc
           imagePullPolicy: IfNotPresent
 
           env:

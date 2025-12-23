@@ -29,7 +29,7 @@ spec:
               mountPath: /pvc
       containers:
         - name: churn-api
-          image: techitfactory/churn-api:c340634c8124a902fdd9d550f03f22228156c579
+          image: techitfactory/churn-api:sha-818eedc
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000

@@ -26,7 +26,7 @@ spec:
                   mountPath: /pvc
           containers:
             - name: retrain
-              image: techitfactory/churn-ml:c340634c8124a902fdd9d550f03f22228156c579
+              image: techitfactory/churn-ml:sha-818eedc
               imagePullPolicy: IfNotPresent
               env:
                 - name: CHURN_MLOPS_CONFIG
