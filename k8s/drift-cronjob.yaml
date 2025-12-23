@@ -18,7 +18,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: drift
-              image: techitfactory/churn-ml:main
+              image: techitfactory/churn-ml:sha-3f9ae81
               imagePullPolicy: IfNotPresent
               env:
                 - name: CHURN_MLOPS_CONFIG
