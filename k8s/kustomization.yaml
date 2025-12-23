@@ -9,5 +9,5 @@ resources:
   - retrain-cronjob.yaml
   - batch-score-proxy-cronjob.yaml
   - seed-model-job.yaml
-  - monitoring/servicemonitor.yaml
-  - monitoring/prometheus-rules.yaml
+  # - monitoring/servicemonitor.yaml
+  # - monitoring/prometheus-rules.yaml
