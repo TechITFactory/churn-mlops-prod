@@ -9,6 +9,7 @@ resources:
   - api-service.yaml
   - batch-cronjob.yaml
   - drift-cronjob.yaml
+  - drift-auto-retrain-cronjob.yaml
   - high-drift-cronjob.yaml
   - retrain-cronjob.yaml
   - batch-score-proxy-cronjob.yaml

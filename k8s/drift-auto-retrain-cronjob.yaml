@@ -1,0 +1,94 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: churn-drift-auto-retrain
+  namespace: churn-mlops
+spec:
+  # Fully automated: runs drift check; if status=FAIL (exit code 2), retrains and promotes.
+  # This avoids needing Prometheus Operator / Alertmanager for orchestration.
+  schedule: "5 1 * * *" # daily 01:05
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            fsGroup: 0
+          restartPolicy: Never
+          initContainers:
+            - name: init-dirs
+              image: busybox:1.36
+              command:
+                - sh
+                - -c
+                - |
+                  mkdir -p /pvc/data/raw /pvc/data/processed /pvc/data/features /pvc/data/predictions
+                  mkdir -p /pvc/artifacts/models /pvc/artifacts/metrics
+                  chmod -R 777 /pvc
+              volumeMounts:
+                - name: mlops-storage
+                  mountPath: /pvc
+          containers:
+            - name: drift-auto-retrain
+              image: techitfactory/churn-ml:sha-d62341e
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: CHURN_MLOPS_CONFIG
+                  value: /app/config/config.yaml
+              command: ["sh", "-c"]
+              args:
+                - |
+                  set -eu
+
+                  echo "[1/2] Running drift check..."
+                  set +e
+                  python -m churn_mlops.monitoring.run_drift_check
+                  drift_ec=$?
+                  set -e
+
+                  if [ "$drift_ec" -eq 0 ]; then
+                    echo "Drift status OK/WARN (exit=0). Not retraining."
+                    exit 0
+                  fi
+
+                  if [ "$drift_ec" -ne 2 ]; then
+                    echo "Unexpected drift exit code: $drift_ec"
+                    exit "$drift_ec"
+                  fi
+
+                  echo "[2/2] Drift FAIL (exit=2). Retraining now..."
+
+                  python -m churn_mlops.data.generate_synthetic
+                  python -m churn_mlops.data.validate
+                  python -m churn_mlops.data.prepare_dataset
+                  python -m churn_mlops.features.build_features
+                  python -m churn_mlops.training.build_labels
+                  python -m churn_mlops.training.build_training_set
+                  python -m churn_mlops.training.train_baseline
+
+                  LATEST_MODEL=$(ls -1 /app/artifacts/models/baseline_logreg_*.joblib | tail -n 1)
+                  echo "Promoting: $LATEST_MODEL"
+                  cp "$LATEST_MODEL" /app/artifacts/models/production_latest.joblib
+
+                  echo "Retrain complete ✅"
+              volumeMounts:
+                - name: mlops-storage
+                  mountPath: /app/data
+                  subPath: data
+                - name: mlops-storage
+                  mountPath: /app/artifacts
+                  subPath: artifacts
+                - name: config
+                  mountPath: /app/config/config.yaml
+                  subPath: config.yaml
+          volumes:
+            - name: config
+              configMap:
+                name: churn-mlops-config
+            - name: mlops-storage
+              persistentVolumeClaim:
+                claimName: churn-mlops-pvc
