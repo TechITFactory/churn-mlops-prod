@@ -4,7 +4,7 @@ metadata:
   name: churn-mlops
   namespace: argocd
 spec:
-  project: production
+  project: default
   source:
     repoURL: https://github.com/techitfactory/churn-mlops-prod.git
     targetRevision: main
