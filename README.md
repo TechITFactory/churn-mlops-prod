@@ -1,223 +1,139 @@
-# churn-mlops-prod
-# Section 13 — Capstone: Production Readiness Close (Student Pack)
+## Churn MLOps — Production-Grade DevOps + MLOps Reference Implementation
 
-This pack gives you copy‑paste friendly files to finish the course and hand to students.
+This repository demonstrates an end-to-end, production-oriented MLOps platform for customer churn prediction:
 
-You will create:
+- Repeatable **data → features → training → model promotion** pipelines
+- **Batch scoring** and a lightweight **score proxy**
+- A **FastAPI** realtime inference service with **Prometheus metrics**
+- Containerized local workflows (Docker Compose) and production deployment patterns (Kubernetes + GitOps)
 
-* `docs/runbook.md`
-* `docs/rollback.md`
-* `docs/final-checklist.md`
-* `scripts/happy_path_local.sh`
-* `scripts/k8s_smoke.sh`
+It’s designed as a practical repo for DevOps/Platform engineers building and operating ML services.
 
-> Notes based on your latest state:
->
-> * You already have working K8s in `churn-mlops` with images around **0.1.4**.
-> * Helm will be fixed later.
-> * The batch score+proxy CronJob failed earlier because the container tried to run `./scripts/*.sh` that were not inside the image. For Section 13 we won’t change that.
+## What we do in this project (end-to-end)
 
----
+1. **Generate and validate data** (local scripts)
+2. **Prepare processed datasets**
+3. **Build features** and **training labels**
+4. **Train models** (baseline + candidate)
+5. **Promote** the best model into the “production” slot
+6. **Batch score** users with the production model
+7. **Serve realtime predictions** via API
+8. **Monitor**: health/readiness + Prometheus metrics, and drift checks
+9. **Deploy** using containers locally and Kubernetes/GitOps in production
 
-## 13.0 Create folders
+These steps are wired through `scripts/` and the `Makefile`.
 
-```bash
-mkdir -p docs scripts
-```
+## Quick start (local Python)
 
----
-
-## 13.1 Runbook (setup → train → batch → serve → monitor)
-
-````bash
-cat << 'EOF' > docs/runbook.md
-# TechITFactory Churn MLOps — Runbook
-
-A single, student-friendly runbook for:
-DATA → TRAIN → DEPLOY → MONITOR → RETRAIN
-
-This repo supports two execution modes:
-1) Local Python
-2) Kubernetes (Minikube)
-
----
-
-## 1) Prerequisites
-
-- Python 3.10+
-- make
-- docker
-- kubectl
-- minikube
-
----
-
-## 2) Local Python — Happy Path
-
-### 2.1 Create venv + install
+Prereqs: Python 3.10+, make
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -U pip
 
-# Base + dev
-pip install -r requirements/base.txt
-pip install -r requirements/dev.txt
-
-# API runtime deps
-pip install -r requirements/api.txt
-
-# Editable install
-pip install -e .
-````
-
-### 2.2 Lint + tests
-
-```bash
+make setup
 make lint
 make test
+
+# Full local pipeline:
+make all
 ```
 
-### 2.3 Train baseline end-to-end
+Run the API:
 
 ```bash
-./scripts/seed_model_local.sh
+./scripts/run_api.sh
 ```
 
-### 2.4 Batch score
-
-```bash
-./scripts/batch_score.sh
-```
-
-### 2.5 Score proxy (needs batch output)
-
-```bash
-./scripts/score_proxy.sh
-```
-
----
-
-## 3) Local API
-
-### 3.1 Run FastAPI locally
-
-```bash
-export CHURN_MLOPS_CONFIG=./config/config.yaml
-uvicorn churn_mlops.api.app:app --host 0.0.0.0 --port 8000
-```
-
-### 3.2 Verify
+Verify endpoints:
 
 ```bash
 curl -s http://localhost:8000/health
-curl -s http://localhost:8000/ready
 curl -s http://localhost:8000/live
+curl -s http://localhost:8000/ready
 curl -s http://localhost:8000/metrics | head
 ```
 
----
+## Quick start (Docker Compose)
 
-## 4) Docker — Stable classroom workflow
-
-**Golden rule:** build BOTH images with SAME version.
+Prereqs: Docker + Docker Compose
 
 ```bash
-export VER=0.1.4
+# Optional: set Grafana admin password (see .env.example)
+export GRAFANA_ADMIN_PASSWORD=CHANGE_ME
 
-# ML image
-docker build -t techitfactory/churn-ml:$VER -f docker/Dockerfile.ml .
+# Train+promote a production model once
+docker compose run --rm seed-model
 
-# API image
-docker build -t techitfactory/churn-api:$VER -f docker/Dockerfile.api .
+# Start API + Prometheus + Grafana
+docker compose up --build
 ```
 
-### 4.1 Run ML seed locally using bind mounts
+URLs:
+- API: http://localhost:8000
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3000
 
-```bash
-docker run --rm \
-  -e CHURN_MLOPS_CONFIG=/app/config/config.yaml \
-  -v "$(pwd)/config:/app/config" \
-  -v "$(pwd)/data:/app/data" \
-  -v "$(pwd)/artifacts:/app/artifacts" \
-  techitfactory/churn-ml:$VER
-```
+## Deploy (production patterns)
 
-### 4.2 Run API container
+This repo includes Kubernetes and GitOps assets for production-style deployments:
 
-```bash
-docker run --rm -p 8000:8000 \
-  -e CHURN_MLOPS_CONFIG=/app/config/config.yaml \
-  -v "$(pwd)/config:/app/config" \
-  -v "$(pwd)/data:/app/data" \
-  -v "$(pwd)/artifacts:/app/artifacts" \
-  techitfactory/churn-api:$VER
-```
+- `k8s/`: Kubernetes manifests (deployments, services, cronjobs, configmaps)
+- `argocd/`: ArgoCD applications/projects (GitOps)
+- `terraform/`: IaC examples for cloud infrastructure
 
----
+Start with:
+- `docs/PRODUCTION_DEPLOYMENT.md`
+- `docs/GITOPS_WORKFLOW.md`
 
-## 5) Kubernetes (Minikube) — Plain manifests
+## Repository entrypoints
 
-### 5.1 Apply core manifests
+### Make targets
 
-```bash
-kubectl apply -f k8s/plain
-```
+The `Makefile` orchestrates the core pipeline:
 
-### 5.2 Run seed job (fresh)
+- `make data` → generate + validate + prepare
+- `make features` → feature engineering
+- `make labels` → labels + training set
+- `make train` → baseline + candidate training
+- `make promote` → promote best model
+- `make batch` → batch score with production model
+- `make all` → end-to-end local run
 
-```bash
-kubectl -n churn-mlops delete job churn-seed-model --ignore-not-found
-kubectl -n churn-mlops apply -f k8s/plain/seed-model-job.yaml
-kubectl -n churn-mlops logs -f job/churn-seed-model
-```
+### Scripts
 
-### 5.3 Verify model artifacts
+Key scripts (see `scripts/`):
 
-```bash
-kubectl -n churn-mlops exec job/churn-seed-model -- ls -l /app/artifacts/models
-```
+- `generate_data.sh`, `validate_data.sh`, `prepare_data.sh`
+- `build_features.sh`, `build_labels.sh`, `build_training_set.sh`
+- `train_baseline.sh`, `train_candidate.sh`, `promote_model.sh`
+- `batch_score.sh`, `score_proxy.sh`
+- `run_api.sh`
 
-### 5.4 Restart API
+## Configuration
 
-```bash
-kubectl -n churn-mlops rollout restart deployment/churn-api
-kubectl -n churn-mlops get pods -w
-```
+Primary config is loaded via `CHURN_MLOPS_CONFIG`.
 
-### 5.5 Port-forward + verify
+- Defaults are under `config/` and `configs/`.
+- The API launcher (`scripts/run_api.sh`) auto-selects a config if you don’t set one.
 
-```bash
-kubectl -n churn-mlops port-forward svc/churn-api 8000:8000
-```
+## Monitoring
 
-In another terminal:
+- API exposes Prometheus metrics at `/metrics`
+- Docker Compose brings up Prometheus + Grafana locally
+- Kubernetes manifests include scheduled jobs for batch scoring/drift checks
 
-```bash
-curl -s http://localhost:8000/health
-curl -s http://localhost:8000/ready
-curl -s http://localhost:8000/live
-curl -s http://localhost:8000/metrics | head
-```
+## Security notes (public repo)
 
----
+- Do not commit secrets (tokens, passwords, private keys). Use GitHub Actions secrets, Kubernetes Secrets, or external secret managers.
+- This repo includes placeholders and safe examples; if you fork it, ensure your own credentials are stored in secret managers.
 
-## 6) Troubleshooting quick hits
+## Helpful docs
 
-### A) Readiness probe 500
+- `HOW_TO_TEST.md` (start here for verification)
+- `QUICK_REFERENCE.md` (common commands)
+- `PRODUCTION_README.md` (longer production overview)
 
-Usually model/config mismatch.
-
-```bash
-kubectl -n churn-mlops exec deploy/churn-api -- ls -l /app/artifacts/models
-kubectl -n churn-mlops exec deploy/churn-api -- cat /app/config/config.yaml
-kubectl -n churn-mlops logs -f deploy/churn-api
-```
-
-### B) Missing python module inside container
-
-Symptom:
 
 * `ModuleNotFoundError: pandas` or `prometheus_client`
 
