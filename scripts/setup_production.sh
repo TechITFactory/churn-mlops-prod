@@ -100,8 +100,9 @@ install_argocd() {
     ARGOCD_PASSWORD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d)
     
     echo -e "${GREEN}✓ ArgoCD installed${NC}"
-    echo -e "ArgoCD Password: ${YELLOW}${ARGOCD_PASSWORD}${NC}"
-    echo "Save this password securely!"
+    echo -e "${YELLOW}ArgoCD initial admin password retrieved (not printed).${NC}"
+    echo "If you need to view it, run (avoid shared terminals/logging):"
+    echo '  kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d'
     
     # Port forward for initial setup
     echo "Starting port-forward on localhost:8080..."
@@ -204,7 +205,8 @@ install_monitoring() {
         echo "Access Grafana:"
         echo "  kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80"
         echo "  Username: admin"
-        echo "  Password: prom-operator"
+        echo "  Password: (retrieve via kubectl)"
+        echo '    kubectl get secret -n monitoring prometheus-grafana -o jsonpath="{.data.admin-password}" | base64 -d'
     fi
 }
 

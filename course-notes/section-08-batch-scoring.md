@@ -392,8 +392,11 @@ from sqlalchemy import create_engine
 
 df = pd.read_csv("data/predictions/churn_predictions_2025-01-15.csv")
 
-engine = create_engine("postgresql://user:pass@host/db")
+engine = create_engine("postgresql://<user>:<password>@<host>/<db>")
 df.to_sql("churn_predictions", engine, if_exists="replace", index=False)
+
+# Example (recommended): build from environment variables instead of hardcoding
+# engine = create_engine(os.environ["DATABASE_URL"])
 ```
 
 ### Export to S3

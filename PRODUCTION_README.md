@@ -334,9 +334,11 @@ API exposes metrics at `/metrics`:
 # Access Grafana
 kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
 
-# Default credentials
+# Credentials
 Username: admin
-Password: prom-operator
+Password: (retrieve from the Grafana secret)
+kubectl get secret -n monitoring prometheus-grafana \
+  -o jsonpath="{.data.admin-password}" | base64 -d
 ```
 
 ### ArgoCD UI
